@@ -1,0 +1,15 @@
+node_modules/
+
+# per-task hardhat build outputs
+*/.artifacts/
+*/.cache/
+
+coverage/
+coverage.json
+typechain-types/
+
+.DS_Store
+.idea/
+.vscode/
+*.log
+npm-debug.log*

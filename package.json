@@ -1,0 +1,34 @@
+{
+  "name": "blockchain-academy-solidity-template",
+  "version": "1.0.0",
+  "description": "Template repository for Solidity tasks in the Blockchain Academy course.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "compile": "hardhat compile",
+    "clean": "hardhat clean",
+    "test": "hardhat test",
+    "coverage": "hardhat coverage",
+    "test:01-token": "cross-env TASK=01-token hardhat test",
+    "compile:01-token": "cross-env TASK=01-token hardhat compile",
+    "coverage:01-token": "cross-env TASK=01-token hardhat coverage",
+    "lint:sol": "solhint \"*/contracts/**/*.sol\"",
+    "lint:sol:fix": "solhint \"*/contracts/**/*.sol\" --fix",
+    "format": "prettier \"**/*.{ts,js,json,sol,md,yml,yaml}\" --check",
+    "format:fix": "prettier \"**/*.{ts,js,json,sol,md,yml,yaml}\" --write"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-viem": "^5.0.5",
+    "@types/node": "^20.19.40",
+    "cross-env": "^10.1.0",
+    "hardhat": "^3.4.5",
+    "prettier": "^3.8.3",
+    "prettier-plugin-solidity": "^2.3.1",
+    "solhint": "^6.2.1",
+    "typescript": "^5.6.3",
+    "viem": "^2.48.11"
+  }
+}
