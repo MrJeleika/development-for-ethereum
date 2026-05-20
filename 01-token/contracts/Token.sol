@@ -58,7 +58,6 @@ contract Token is IERC20 {
         _transfer(from, to, value);
         return true;
     }
-
     function _transfer(address from, address to, uint256 value) private {
         if (to == address(0)) revert TransferToZeroAddress();
         uint256 fromBalance = _balances[from];
