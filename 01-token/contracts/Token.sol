@@ -41,12 +41,16 @@ contract Token is IERC20 {
         if (to == address(0)) {
             revert TransferToZeroAddress();
         }
-        if (balances[msg.sender] < value) {
+
+        uint256 senderBalance = balances[msg.sender];
+        uint256 receiverBalance = balances[to];
+
+        if (senderBalance < value) {
             revert InsufficientBalance();
         }
 
-        balances[msg.sender] = balances[msg.sender] - value;
-        balances[to] = balances[to] + value;
+        balances[msg.sender] = senderBalance - value;
+        balances[to] = receiverBalance + value;
 
         emit Transfer(msg.sender, to, value);
         return true;
