@@ -1,20 +1,15 @@
 # Blockchain Academy — Solidity Template
 
-Template repo for Solidity tasks in the Blockchain Academy course. Clone this
-repo, complete the tasks, push to your fork, and submit the URL on the academy
+Template repo for the Solidity track of the Blockchain Academy course, run by
+[Redduck](https://redduck.io). Course materials, task briefs, and submission
+live on [academy.redduck.io](https://academy.redduck.io). Clone this repo,
+work through the tasks, push to your fork, and submit the URL on the academy
 website.
-
-## Stack
-
-- [Hardhat 3](https://hardhat.org) — Solidity dev environment.
-- [viem](https://viem.sh) — Ethereum client for tests and scripts.
-- [Node.js test runner](https://nodejs.org/api/test.html) — `describe` / `it`.
-- TypeScript, prettier, solhint.
 
 ## Requirements
 
-- Node.js **22+** (`.nvmrc` is set to 22).
-- npm (comes with Node).
+- Node.js **22+** (see `.nvmrc`).
+- npm (ships with Node).
 
 ## Layout
 
@@ -22,79 +17,55 @@ website.
 .
 ├── hardhat.config.ts        # one config for the whole repo
 ├── package.json
-├── 01-counter/              # worked example — read it, don't modify
-│   ├── contracts/Counter.sol
-│   └── tests/Counter.test.ts
-└── 02-simple-token/         # your turn — implement the contract
-    ├── contracts/SimpleToken.sol
-    └── tests/SimpleToken.test.ts
+├── tsconfig.json
+└── 01-token/                # current task
+    ├── TASK.md              # brief — read this first
+    ├── contracts/           # Solidity sources (edit these)
+    └── tests/               # test suite
 ```
 
-Each task is a self-contained folder with its own `contracts/` and `tests/`.
-**Only one task at a time is compiled and tested** — selected by the `TASK`
-environment variable (defaults to `01-counter`).
+Each task is a self-contained folder with its own `TASK.md`, `contracts/`, and
+`tests/`. **Only one task is compiled and tested at a time** — selected by the
+`TASK` environment variable.
 
 ## Getting started
 
 ```bash
 npm install
-
-# work on the worked example
-npm run test:01-counter
-
-# work on your task
-npm run test:02-simple-token
+npm run compile:01-token
+npm run test:01-token
 ```
 
-Fresh clone: the **Counter** task passes, the **SimpleToken** task has failing
-tests waiting for your implementation.
-
-## Commands
-
-Per-task scripts (recommended for students):
+You can also pick a task with the `TASK` env var:
 
 ```bash
-npm run compile:01-counter
-npm run test:01-counter
-npm run coverage:01-counter
-
-npm run compile:02-simple-token
-npm run test:02-simple-token
-npm run coverage:02-simple-token
+TASK=01-token npm test
+TASK=01-token npm run coverage
 ```
 
-Or pick a task with the `TASK` env var:
+Repo-wide helpers:
 
 ```bash
-TASK=02-simple-token npm run compile
-TASK=02-simple-token npm test
-TASK=02-simple-token npm run coverage
-```
-
-On Windows PowerShell:
-
-```powershell
-$env:TASK="02-simple-token"; npm test
-```
-
-Repo-wide:
-
-```bash
-npm run lint:sol             # solhint across all tasks
-npm run format:fix           # prettier across the repo
+npm run lint:sol      # solhint over all tasks
+npm run format:fix    # prettier over the repo
 ```
 
 ## Workflow per task
 
-1. Read the task description on the academy website.
-2. Open the task folder (e.g. `02-simple-token/`).
-3. Read the test file in `tests/` — it is the **specification**.
-4. Edit the `.sol` file in `contracts/` until every test passes.
-5. Commit and push. Submit the repo URL on the website.
+1. Open the task folder and read `TASK.md` — it explains what to build and
+   links to anything else you need.
+2. Implement the contract in `contracts/`.
+3. Write tests in `tests/` if the task asks you to. Early tasks ship with the
+   test suite pre-defined; later capstones require you to write your own.
+4. Run `npm run test:<task>` until everything passes.
+5. Commit, push to your fork, and submit the repo URL on
+   [academy.redduck.io](https://academy.redduck.io).
 
 ## Rules
 
-- Do **not** change function signatures, event signatures, or custom error
-  names in the task contracts — the tests and the AI reviewer match on them.
-- Do **not** modify the test files.
-- Stick to Solidity `0.8.28` (the version set in `hardhat.config.ts`).
+- Don't change function signatures, event signatures, or custom error names in
+  task contracts — the tests and the reviewer match on them.
+- Don't modify pre-defined test files. If a task asks you to write tests, add
+  new ones; don't edit the existing spec.
+- Don't copy implementations from OpenZeppelin, Solmate, Solady, or tutorials.
+  See the per-task `TASK.md` for the full reasoning.
