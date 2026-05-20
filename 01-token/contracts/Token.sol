@@ -8,9 +8,9 @@ contract Token is IERC20 {
     string public symbol;
     uint8 public constant decimals = 18;
 
-    uint256 private _totalSupply;
-    mapping(address => uint256) private _balances;
-    mapping(address => mapping(address => uint256)) private _allowances;
+    uint256 private supply;
+    mapping(address => uint256) private balances;
+    mapping(address => mapping(address => uint256)) private allowed;
 
     error InsufficientBalance();
     error InsufficientAllowance();
@@ -20,52 +20,65 @@ contract Token is IERC20 {
     constructor(string memory name_, string memory symbol_, uint256 initialSupply) {
         name = name_;
         symbol = symbol_;
-        _totalSupply = initialSupply;
-        _balances[msg.sender] = initialSupply;
+        supply = initialSupply;
+        balances[msg.sender] = initialSupply;
         emit Transfer(address(0), msg.sender, initialSupply);
     }
 
     function totalSupply() external view returns (uint256) {
-        return _totalSupply;
+        return supply;
     }
 
     function balanceOf(address account) external view returns (uint256) {
-        return _balances[account];
+        return balances[account];
     }
 
     function allowance(address owner, address spender) external view returns (uint256) {
-        return _allowances[owner][spender];
+        return allowed[owner][spender];
     }
 
     function transfer(address to, uint256 value) external returns (bool) {
-        _transfer(msg.sender, to, value);
+        if (to == address(0)) {
+            revert TransferToZeroAddress();
+        }
+        if (balances[msg.sender] < value) {
+            revert InsufficientBalance();
+        }
+
+        balances[msg.sender] = balances[msg.sender] - value;
+        balances[to] = balances[to] + value;
+
+        emit Transfer(msg.sender, to, value);
         return true;
     }
 
     function approve(address spender, uint256 value) external returns (bool) {
-        if (spender == address(0)) revert ApproveToZeroAddress();
-        _allowances[msg.sender][spender] = value;
+        if (spender == address(0)) {
+            revert ApproveToZeroAddress();
+        }
+
+        allowed[msg.sender][spender] = value;
+
         emit Approval(msg.sender, spender, value);
         return true;
     }
 
     function transferFrom(address from, address to, uint256 value) external returns (bool) {
-        uint256 current = _allowances[from][msg.sender];
-        if (current < value) revert InsufficientAllowance();
-        unchecked {
-            _allowances[from][msg.sender] = current - value;
+        if (to == address(0)) {
+            revert TransferToZeroAddress();
         }
-        _transfer(from, to, value);
-        return true;
-    }
-    function _transfer(address from, address to, uint256 value) private {
-        if (to == address(0)) revert TransferToZeroAddress();
-        uint256 fromBalance = _balances[from];
-        if (fromBalance < value) revert InsufficientBalance();
-        unchecked {
-            _balances[from] = fromBalance - value;
+        if (allowed[from][msg.sender] < value) {
+            revert InsufficientAllowance();
         }
-        _balances[to] += value;
+        if (balances[from] < value) {
+            revert InsufficientBalance();
+        }
+
+        allowed[from][msg.sender] = allowed[from][msg.sender] - value;
+        balances[from] = balances[from] - value;
+        balances[to] = balances[to] + value;
+
         emit Transfer(from, to, value);
+        return true;
     }
 }
