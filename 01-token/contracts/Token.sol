@@ -41,16 +41,12 @@ contract Token is IERC20 {
         if (to == address(0)) {
             revert TransferToZeroAddress();
         }
-
-        uint256 senderBalance = balances[msg.sender];
-        uint256 receiverBalance = balances[to];
-
-        if (senderBalance < value) {
+        if (balances[msg.sender] < value) {
             revert InsufficientBalance();
         }
 
-        balances[msg.sender] = senderBalance - value;
-        balances[to] = receiverBalance + value;
+        balances[msg.sender] = balances[msg.sender] - value;
+        balances[to] = balances[to] + value;
 
         emit Transfer(msg.sender, to, value);
         return true;
@@ -68,9 +64,6 @@ contract Token is IERC20 {
     }
 
     function transferFrom(address from, address to, uint256 value) external returns (bool) {
-        if (to == address(0)) {
-            revert TransferToZeroAddress();
-        }
         if (allowed[from][msg.sender] < value) {
             revert InsufficientAllowance();
         }
