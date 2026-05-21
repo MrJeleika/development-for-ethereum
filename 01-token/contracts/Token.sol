@@ -71,7 +71,6 @@ contract Token is IERC20 {
             revert InsufficientBalance();
         }
 
-        allowed[from][msg.sender] = allowed[from][msg.sender] - value;
         balances[from] = balances[from] - value;
         balances[to] = balances[to] + value;
 
