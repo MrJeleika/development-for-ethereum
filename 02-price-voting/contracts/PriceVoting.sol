@@ -3,25 +3,23 @@ pragma solidity 0.8.28;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-// Reflection: what breaks if voters could withdraw DURING voting?
-// weightOf[price] would no longer be monotone in price weight. The leader
-// pointer is updated only when a new weight strictly exceeds the cached
-// leader weight - it assumes weights only grow. A mid-voting withdrawal
-// could lower the leader's weight below another price's weight, and no
-// future vote would surface the new true max because the cached weight is
-// stale-high. Result: leader() and the price chosen by finalize() would be
-// silently wrong. Fixing it requires a different leader-tracking strategy
-// (lazy recomputation with hints, sorted structures, or claim-and-challenge).
+// PriceVoting contract for the 02 task.
+// Users vote for a price by locking tokens. After voting ends anyone can
+// call finalize() to pick the winner, and voters can call claim() to get
+// their tokens back.
 
 contract PriceVoting {
-    IERC20 public immutable token;
-    uint256 public immutable votingEnd;
+    IERC20 public token;
+    uint256 public votingEnd;
 
-    mapping(uint256 price => uint256) public weightOf;
-    mapping(address voter => uint256) public lockedOf;
+    // price -> total weight locked behind that price
+    mapping(uint256 => uint256) public weightOf;
+    // voter -> total amount of tokens they have locked
+    mapping(address => uint256) public lockedOf;
 
-    uint256 private _leaderPrice;
-    uint256 private _leaderWeight;
+    // current leader (price with most weight so far)
+    uint256 public leaderPrice;
+    uint256 public leaderWeight;
 
     uint256 public currentTokenPrice;
     bool public finalized;
@@ -42,24 +40,25 @@ contract PriceVoting {
         votingEnd = _votingEnd;
     }
 
-    // ----- Write functions -----
-
     function vote(uint256 price, uint256 amount) external {
         if (block.timestamp >= votingEnd) revert VotingEnded();
         if (amount == 0) revert ZeroAmount();
 
-        if (!token.transferFrom(msg.sender, address(this), amount)) revert TransferFailed();
+        // pull tokens from the voter
+        bool ok = token.transferFrom(msg.sender, address(this), amount);
+        if (!ok) revert TransferFailed();
 
-        lockedOf[msg.sender] += amount;
-        uint256 newWeight = weightOf[price] + amount;
-        weightOf[price] = newWeight;
+        // update accounting
+        lockedOf[msg.sender] = lockedOf[msg.sender] + amount;
+        weightOf[price] = weightOf[price] + amount;
+
+        // update leader if this price now has the highest weight
+        if (weightOf[price] >= leaderWeight) {
+            leaderPrice = price;
+            leaderWeight = weightOf[price];
+        }
 
         emit Voted(msg.sender, price, amount);
-
-        if (newWeight > _leaderWeight) {
-            _leaderPrice = price;
-            _leaderWeight = newWeight;
-        }
     }
 
     function finalize() external {
@@ -67,27 +66,29 @@ contract PriceVoting {
         if (finalized) revert AlreadyFinalized();
 
         finalized = true;
-        if (_leaderWeight > 0) {
-            currentTokenPrice = _leaderPrice;
+        if (leaderWeight > 0) {
+            currentTokenPrice = leaderPrice;
         }
-        emit PriceFinalized(_leaderPrice, _leaderWeight);
+
+        emit PriceFinalized(leaderPrice, leaderWeight);
     }
 
     function claim() external {
         if (block.timestamp < votingEnd) revert VotingActive();
+
         uint256 amount = lockedOf[msg.sender];
         if (amount == 0) revert NothingToClaim();
 
         lockedOf[msg.sender] = 0;
 
-        emit Claimed(msg.sender, amount);
+        bool ok = token.transfer(msg.sender, amount);
+        if (!ok) revert TransferFailed();
 
-        if (!token.transfer(msg.sender, amount)) revert TransferFailed();
+        emit Claimed(msg.sender, amount);
     }
 
-    // ----- Read functions -----
-
+    // required getter from the spec
     function leader() external view returns (uint256 price, uint256 weight) {
-        return (_leaderPrice, _leaderWeight);
+        return (leaderPrice, leaderWeight);
     }
 }
