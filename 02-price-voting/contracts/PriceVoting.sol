@@ -20,6 +20,10 @@ contract PriceVoting {
     // current leader (price with most weight so far)
     uint256 public leaderPrice;
     uint256 public leaderWeight;
+    // true if at least one OTHER price currently has weight == leaderWeight.
+    // Tracked in O(1) so finalize() can refuse to set a winner under a tie
+    // without iterating over all prices.
+    bool public tieAtTop;
 
     uint256 public currentTokenPrice;
     bool public finalized;
@@ -52,10 +56,21 @@ contract PriceVoting {
         lockedOf[msg.sender] = lockedOf[msg.sender] + amount;
         weightOf[price] = weightOf[price] + amount;
 
-        // update leader if this price now has the highest weight
-        if (weightOf[price] > leaderWeight) {
+        uint256 newWeight = weightOf[price];
+
+        // Update leader / tie tracking. Cases:
+        // - newWeight strictly exceeds current leader weight: this price
+        //   becomes the unique new leader and clears any prior tie.
+        // - newWeight equals current leader weight on a DIFFERENT price:
+        //   the leader pointer does not move (first-to-arrive wins) but a
+        //   tie at the top now exists.
+        // - any other case: leader and tie state are unchanged.
+        if (newWeight > leaderWeight) {
             leaderPrice = price;
-            leaderWeight = weightOf[price];
+            leaderWeight = newWeight;
+            tieAtTop = false;
+        } else if (newWeight == leaderWeight && price != leaderPrice) {
+            tieAtTop = true;
         }
 
         emit Voted(msg.sender, price, amount);
@@ -66,7 +81,9 @@ contract PriceVoting {
         if (finalized) revert AlreadyFinalized();
 
         finalized = true;
-        if (leaderWeight > 0) {
+        // Spec edge case: with no votes, or with a tie at the top, the
+        // price must not be changed.
+        if (leaderWeight > 0 && !tieAtTop) {
             currentTokenPrice = leaderPrice;
         }
 
