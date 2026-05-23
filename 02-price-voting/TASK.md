@@ -2,6 +2,7 @@
 
 Build a smart contract that lets token holders vote on a new price for their token. Write a test suite that verifies the contract behaves correctly.
 
+
 ## What you're using
 
 The ERC-20 token from your previous capstone task. Copy the contract file into `contracts/Token.sol` of your Hardhat project. You don't need to modify it. The voting contract will treat it as a generic ERC-20 and interact through the standard interface.
