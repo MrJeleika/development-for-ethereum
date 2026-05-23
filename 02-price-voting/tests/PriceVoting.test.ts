@@ -171,6 +171,19 @@ describe("PriceVoting", function () {
 
       assert.equal(await voting.read.currentTokenPrice(), 0n);
     });
+
+    it("with a tie at the top, currentTokenPrice is NOT changed", async function () {
+      const { voting, votingEnd, alice, bob } = await networkHelpers.loadFixture(deployVotingFixture);
+
+      await voting.write.vote([100n, parseEther("50")], { account: alice.account });
+      await voting.write.vote([200n, parseEther("50")], { account: bob.account });
+
+      await networkHelpers.time.increaseTo(votingEnd);
+      await voting.write.finalize();
+
+      assert.equal(await voting.read.currentTokenPrice(), 0n);
+      assert.equal(await voting.read.finalized(), true);
+    });
   });
 
   describe("claim", function () {
