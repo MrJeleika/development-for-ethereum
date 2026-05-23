@@ -73,10 +73,11 @@ Write a test file `test/PriceVoting.ts` covering these scenarios. Some starter t
 11. `finalize` reverts when called twice.
 12. `finalize` correctly sets `currentTokenPrice` and `finalized` and emits `PriceFinalized`.
 13. `finalize` with no votes succeeds and `currentTokenPrice` stays at 0.
-14. `claim` reverts when called before `votingEnd`.
-15. `claim` reverts when the caller has nothing locked.
-16. `claim` returns the correct amount and zeros out the voter's locked balance.
-17. A voter cannot claim twice.
+14. `finalize` with a tie succeeds and `currentTokenPrice` stays at 0.
+15. `claim` reverts when called before `votingEnd`.
+16. `claim` reverts when the caller has nothing locked.
+17. `claim` returns the correct amount and zeros out the voter's locked balance.
+18. A voter cannot claim twice.
 
 ## Out of scope
 

@@ -89,6 +89,17 @@ describe("PriceVoting", function () {
       assert.equal(p, 200n);
     });
 
+    it("does NOT update leader on a tie - first-to-arrive wins", async function () {
+      const { voting, alice, bob } = await networkHelpers.loadFixture(deployVotingFixture);
+
+      await voting.write.vote([100n, parseEther("50")], { account: alice.account });
+      await voting.write.vote([200n, parseEther("50")], { account: bob.account });
+
+      const [p, w] = await voting.read.leader();
+      assert.equal(p, 100n);
+      assert.equal(w, parseEther("50"));
+    });
+
     it("reverts after votingEnd", async function () {
       const { voting, votingEnd, alice } = await networkHelpers.loadFixture(deployVotingFixture);
 

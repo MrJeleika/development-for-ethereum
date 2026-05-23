@@ -79,14 +79,14 @@ contract PriceVoting {
         uint256 amount = lockedOf[msg.sender];
         if (amount == 0) revert NothingToClaim();
 
-        // send the locked tokens back to the voter
-        bool ok = token.transfer(msg.sender, amount);
-        if (!ok) revert TransferFailed();
-
-        // clear their locked balance now that they've been paid
+        // CEI: zero the locked balance before the external token call to
+        // prevent reentrancy through tokens with transfer hooks.
         lockedOf[msg.sender] = 0;
 
         emit Claimed(msg.sender, amount);
+
+        bool ok = token.transfer(msg.sender, amount);
+        if (!ok) revert TransferFailed();
     }
 
     // required getter from the spec
