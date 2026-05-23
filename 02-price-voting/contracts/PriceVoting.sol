@@ -53,7 +53,7 @@ contract PriceVoting {
         weightOf[price] = weightOf[price] + amount;
 
         // update leader if this price now has the highest weight
-        if (weightOf[price] >= leaderWeight) {
+        if (weightOf[price] > leaderWeight) {
             leaderPrice = price;
             leaderWeight = weightOf[price];
         }
@@ -79,10 +79,12 @@ contract PriceVoting {
         uint256 amount = lockedOf[msg.sender];
         if (amount == 0) revert NothingToClaim();
 
-        lockedOf[msg.sender] = 0;
-
+        // send the locked tokens back to the voter
         bool ok = token.transfer(msg.sender, amount);
         if (!ok) revert TransferFailed();
+
+        // clear their locked balance now that they've been paid
+        lockedOf[msg.sender] = 0;
 
         emit Claimed(msg.sender, amount);
     }
