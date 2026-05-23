@@ -65,7 +65,7 @@ describe("Token", async () => {
 
     it("emits a Transfer event", async () => {
       const token = await deploy();
-      const fromBlock = await publicClient.getBlockNumber();
+      const fromBlock = (await publicClient.getBlockNumber()) + 1n;
       const amount = parseEther("100");
 
       await token.write.transfer([alice.account.address, amount]);
