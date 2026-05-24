@@ -27,7 +27,7 @@ describe("PriceVotingWithdrawal", function () {
   }
 
   describe("vote", function () {
-    it("locks tokens and records the price", async function () {
+    it("locks tokens and updates accounting", async function () {
       const { voting, alice } = await networkHelpers.loadFixture(deployVotingFixture);
       await voting.write.vote([100n, parseEther("50")], { account: alice.account });
 
@@ -47,7 +47,25 @@ describe("PriceVotingWithdrawal", function () {
       );
     });
 
-    it("stacks weight across voters", async function () {
+    it("a single vote places the price at the top of the leaderboard", async function () {
+      const { voting, alice } = await networkHelpers.loadFixture(deployVotingFixture);
+      await voting.write.vote([100n, parseEther("50")], { account: alice.account });
+
+      const [p, w] = await voting.read.leader();
+      assert.equal(p, 100n);
+      assert.equal(w, parseEther("50"));
+    });
+
+    it("heavier price overtakes the leader", async function () {
+      const { voting, alice, bob } = await networkHelpers.loadFixture(deployVotingFixture);
+      await voting.write.vote([100n, parseEther("40")], { account: alice.account });
+      await voting.write.vote([200n, parseEther("60")], { account: bob.account });
+
+      const [p] = await voting.read.leader();
+      assert.equal(p, 200n);
+    });
+
+    it("stacks weight across voters for the same price", async function () {
       const { voting, alice, bob } = await networkHelpers.loadFixture(deployVotingFixture);
       await voting.write.vote([100n, parseEther("30")], { account: alice.account });
       await voting.write.vote([100n, parseEther("70")], { account: bob.account });
@@ -122,6 +140,19 @@ describe("PriceVotingWithdrawal", function () {
         "InsufficientLocked",
       );
     });
+
+    it("promotes the runner-up when the leader's voter withdraws", async function () {
+      const { voting, alice, bob } = await networkHelpers.loadFixture(deployVotingFixture);
+      await voting.write.vote([100n, parseEther("100")], { account: alice.account });
+      await voting.write.vote([200n, parseEther("50")], { account: bob.account });
+
+      // Alice (the leader) withdraws everything
+      await voting.write.withdraw([100n, parseEther("100")], { account: alice.account });
+
+      const [p, w] = await voting.read.leader();
+      assert.equal(p, 200n);
+      assert.equal(w, parseEther("50"));
+    });
   });
 
   describe("finalize", function () {
@@ -131,7 +162,7 @@ describe("PriceVotingWithdrawal", function () {
       await viem.assertions.revertWithCustomError(voting.write.finalize(), voting, "VotingActive");
     });
 
-    it("picks the heaviest price", async function () {
+    it("snapshots the leader as the winning price", async function () {
       const { voting, votingEnd, alice, bob } = await networkHelpers.loadFixture(deployVotingFixture);
       await voting.write.vote([100n, parseEther("30")], { account: alice.account });
       await voting.write.vote([200n, parseEther("70")], { account: bob.account });
@@ -143,14 +174,10 @@ describe("PriceVotingWithdrawal", function () {
       assert.equal(await voting.read.finalized(), true);
     });
 
-    it("recomputes correctly after the leader's voter withdraws", async function () {
+    it("returns the correct winner even after the leader withdrew", async function () {
       const { voting, votingEnd, alice, bob } = await networkHelpers.loadFixture(deployVotingFixture);
-
-      // Alice's price becomes lazy leader during voting
       await voting.write.vote([100n, parseEther("100")], { account: alice.account });
       await voting.write.vote([200n, parseEther("50")], { account: bob.account });
-      // Alice withdraws everything; lazy pointer is stale, but the
-      // authoritative scan in finalize should still pick 200.
       await voting.write.withdraw([100n, parseEther("100")], { account: alice.account });
 
       await networkHelpers.time.increaseTo(votingEnd);
