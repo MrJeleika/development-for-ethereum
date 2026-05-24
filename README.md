@@ -9,7 +9,7 @@ website
 ## Requirements
 
 - Node.js **22+** (see `.nvmrc`).
-- npm (ships with Node).
+- npm (ships with Node)
 
 ## Layout
 
