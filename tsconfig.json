@@ -8,12 +8,10 @@
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true
   },
-  "include": [
-    "hardhat.config.ts",
-    "*/tests/**/*.ts",
-    "*/.artifacts/**/*.d.ts"
-  ],
+  "include": ["hardhat.config.ts", "*/tests/**/*.ts", "*/.artifacts/**/*.d.ts"],
   "exclude": ["node_modules", "**/.cache", "coverage"]
 }
