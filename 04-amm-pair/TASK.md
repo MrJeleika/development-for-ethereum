@@ -1,106 +1,77 @@
-# Task: Constant-product AMM pair (pull-based, Uniswap V2 style)
+# Task: Constant-product AMM pair
 
-Implement a single liquidity-pool contract for two ERC-20 tokens — a
-constant-product automated market maker (`x · y = k`). The pair **is itself an
-ERC-20**: liquidity providers receive LP tokens representing their share of the
-pool. You are given a skeleton; you implement the public functions and write
-most of the tests.
+You've seen the Uniswap V2 lecture. Now build a working prototype.
 
-This folds Uniswap V2's two layers into one. Real V2 splits it: the **Pair**
-(core) holds funds and exposes a low-level push swap, while the **Router**
-(periphery) is the friendly layer that pulls your tokens and computes outputs.
-Here both live in one contract — the pool pulls input with `transferFrom` and
-computes the output for you. No Factory, no Router, no flash swaps, no ETH.
+## Background
 
-## What you're given
+A V2 pool holds two ERC-20 tokens and a single math invariant: `x * y = k`. Anyone can swap one token for the other against the pool. Anyone can deposit both tokens to become a liquidity provider, receiving LP tokens that represent their share of the reserves.
 
-`contracts/Pair.sol` already contains:
+Real V2 splits this across two contracts: a Pair (core) that holds funds and exposes a low-level push-style swap, and a Router (periphery) that handles user-friendly pulls and computes outputs. This task folds both layers into one. The pair pulls input tokens with `transferFrom` and computes outputs internally. No factory, no router, no flash swaps, no native ETH support.
 
-- all **state variables**, **events**, and **custom errors**,
-- the **constructor**,
-- the private **math helpers** (`_sqrt`, `_min`, `_sync`).
+The pair contract is itself an ERC-20. LP tokens are minted on deposit and burned on withdrawal.
 
-The four public functions — `getAmountOut`, `addLiquidity`, `removeLiquidity`,
-`swap` — are **stubs that revert**. Implement them. Do not change the public
-signatures, event signatures, or error names: the reviewer matches on them.
+## Architecture
 
-`contracts/Token.sol` is the generic ERC-20 from earlier tasks. The tests deploy
-two instances as `token0` / `token1`.
+`contracts/Pair.sol` is the on-chain contract. It inherits from OpenZeppelin's `ERC20`, where the inherited token is the LP token. The starter has state, errors, events, the constructor, and a few private math helpers. The four public functions are stubs you implement.
 
-## The model
+`contracts/Token.sol` is the generic ERC-20 used to instantiate the two pool tokens in tests.
 
-Reserves (`reserve0`, `reserve1`) track the pool's accounting **separately from
-raw balances**. After every transfer in or out, call `_sync()` to settle the
-reserves to the current balances. The product `reserve0 · reserve1 = k` is the
-curve; price is just the ratio of the reserves.
+## On-chain behavior
 
-### `getAmountOut` — the 0.3% fee formula
+### `getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) → uint256`
 
-```
-amountInWithFee = amountIn · 997
-amountOut       = (amountInWithFee · reserveOut) / (reserveIn · 1000 + amountInWithFee)
-```
+Pure function. Returns how much of the output token a trader gets for `amountIn` of the input token, given the current reserves. The math must respect the constant-product invariant and charge a 0.3% fee on the input.
 
-Only 99.7% of the input moves along the curve; the skimmed 0.3% stays in the
-pool and accrues to LPs. Revert `InsufficientAmount` if `amountIn == 0`, and
-`InsufficientLiquidity` if either reserve is 0.
+- If `amountIn == 0`, revert `InsufficientAmount`.
+- If either reserve is 0, revert `InsufficientLiquidity`.
+- The product of reserves (k) must not decrease across the corresponding swap. The fee makes k strictly grow.
 
-**Worked example to check your math:** a balanced **1000 / 1000** pool, swapping
-**100** in, should return **≈ 90.661** out (`99700 · 1000 / (1000·1000 + 99700)
-= 99 700 000 / 1 099 700 ≈ 90.6611`). If your formula doesn't reproduce this
-number, it's wrong.
+### `addLiquidity(uint256 amount0, uint256 amount1) → uint256 liquidity`
 
-### `addLiquidity(amount0, amount1)`
+The caller deposits both tokens and receives LP tokens in return.
 
-Pull both tokens in via `transferFrom`, then mint LP:
+- Pull `amount0` of `token0` and `amount1` of `token1` from the caller via `transferFrom`.
+- Mint LP tokens to the caller.
+- Update reserves to reflect the new balances.
+- Emit `LiquidityAdded(msg.sender, amount0, amount1, liquidity)`.
+- Revert `InsufficientAmount` if either `amount0` or `amount1` is 0.
+- Revert `InsufficientLiquidity` if the computed LP amount is 0.
 
-- **First provider** (`totalSupply() == 0`):
-  `liquidity = sqrt(amount0 · amount1) − MINIMUM_LIQUIDITY`, and mint
-  `MINIMUM_LIQUIDITY` to a dead address (`0xdEaD`) to lock it forever. This is
-  required — it blocks the first-depositor share-inflation attack.
-- **Later providers:**
-  `liquidity = min(amount0 · totalSupply / reserve0, amount1 · totalSupply / reserve1)`.
+The amount of LP minted depends on whether the pool is fresh. When the pool is empty, the first depositor establishes the initial scale. When the pool already has reserves, later depositors must receive LP proportional to the smaller of their two deposits relative to the pool's existing ratio. Depositing out of ratio means the smaller side determines the mint, and the excess on the larger side is forfeited to the pool.
 
-Mint `liquidity` to the caller, `_sync()`, emit `LiquidityAdded`. Revert
-`InsufficientAmount` on a zero input, `InsufficientLiquidity` if `liquidity == 0`.
+The first depositor must permanently lock `MINIMUM_LIQUIDITY` units of LP supply. Without this lock, the contract is vulnerable to the first-depositor inflation attack: an attacker deposits a tiny amount, then donates tokens directly to the contract to inflate the per-LP-token share, causing the next legitimate depositor's allocation to round to zero.
 
-### `removeLiquidity(liquidity)`
+### `removeLiquidity(uint256 liquidity) → (uint256 amount0, uint256 amount1)`
 
-Pay out a pro-rata slice of both reserves
-(`amount_i = liquidity · reserve_i / totalSupply`), burn the LP from the caller,
-transfer both tokens out, `_sync()`, emit `LiquidityRemoved`.
+The caller burns `liquidity` of their LP tokens and receives a proportional share of both reserves.
 
-### `swap(tokenIn, amountIn, minAmountOut)`
+- Burn `liquidity` LP tokens from the caller.
+- Transfer the proportional share of `token0` and `token1` to the caller.
+- Update reserves.
+- Emit `LiquidityRemoved(msg.sender, amount0, amount1, liquidity)`.
 
-Identify direction from `tokenIn` (revert `InvalidToken` if it isn't `token0`
-or `token1`). Compute the output with `getAmountOut` against the right reserves;
-revert `InsufficientOutput` if it's below `minAmountOut` (slippage guard). Pull
-`amountIn` of the input token, transfer the output token out, `_sync()`, emit
-`Swapped`.
+The amounts returned must be proportional to the caller's share of total LP supply.
 
-## Testing requirements
+### `swap(address tokenIn, uint256 amountIn, uint256 minAmountOut) → uint256 amountOut`
 
-A starter test in `tests/Pair.test.ts` covers a swap — it fails until your
-functions work, and making it pass is your first milestone. **Don't edit it.**
-Add a new test file with the rest:
+A user swaps `amountIn` of `tokenIn` for the other token.
 
-1. First `addLiquidity` mints `sqrt(a·b) − 1000` and locks `1000` to `0xdEaD`.
-2. A second provider depositing in the same ratio gets proportional LP.
-3. An imbalanced deposit mints `min(...)` (the smaller side wins).
-4. `removeLiquidity` returns a proportional slice of both reserves and burns the LP.
-5. `swap` reverts on `InvalidToken`, and on `InsufficientOutput` when `minAmountOut` is too high.
-6. Two swaps in a row: the second gets a worse rate (price moved).
-7. `getAmountOut` reverts on zero input and on an empty pool.
+- If `tokenIn` is neither `token0` nor `token1`, revert `InvalidToken`.
+- Compute the output via `getAmountOut`, using the reserves in the correct order for the swap direction.
+- If the computed output is less than `minAmountOut`, revert `InsufficientOutput`.
+- Pull `amountIn` of the input token from the caller.
+- Transfer the output token to the caller.
+- Update reserves.
+- Emit `Swapped(msg.sender, tokenIn, amountIn, amountOut)`.
 
-## Out of scope (note, don't handle)
+The `minAmountOut` parameter is the caller's slippage protection. Other transactions may move the pool between the moment the caller computed their expected output off chain and the moment their swap is mined.
 
-Fee-on-transfer / rebasing tokens; TWAP price oracles; flash swaps; reentrancy
-hardening (a `lock` modifier) — fine to add, not required for a plain ERC-20.
+## Constraints
 
-## Reflection
+The contract must not copy code from Uniswap V2's source. Derive the implementation from the V2 lecture and this spec. The starter has the imports and helpers you need.
 
-In a markdown file or a header comment, answer:
+## Tests
 
-**Why is `MINIMUM_LIQUIDITY` locked on the first mint, and what concrete failure
-does it prevent?** And: **why does an imbalanced `addLiquidity` use `min(...)`
-rather than averaging the two sides?**
+A starter test in `tests/Pair.test.ts` covers one swap end-to-end. It fails until `addLiquidity`, `swap`, and `getAmountOut` are implemented. Don't edit it.
+
+Add tests in a separate file covering the other behaviors: first and subsequent liquidity provision, removal, slippage rejection, invalid-token rejection, the first-depositor lock, and any edge cases you find worth exercising.
