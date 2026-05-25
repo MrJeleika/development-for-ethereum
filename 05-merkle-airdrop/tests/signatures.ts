@@ -13,7 +13,7 @@ export async function signAirdropClaim(
   claimant: Address,
   amount: bigint,
 ): Promise<ClaimSignatureParts> {
-  const messageHash = keccak256(encodePacked(["address", "uint256"], [claimant, amount]));
+  const messageHash = keccak256(encodePacked(["address"], [claimant]));
 
   // personal_sign adds the "\x19Ethereum Signed Message:\n32" prefix, same as the contract
   const sig = await signerWallet.signMessage({

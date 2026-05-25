@@ -35,20 +35,20 @@ contract MerkleAirdrop {
         bytes32 leaf = keccak256(abi.encodePacked(msg.sender, amount));
         if (!_verify(proof, leaf)) revert InvalidProof();
 
-        token.transfer(msg.sender, amount);
         hasClaimed[msg.sender] = true;
+        token.transfer(msg.sender, amount);
         emit Claimed(msg.sender, amount);
     }
 
     function claimWithSignature(uint256 amount, uint8 v, bytes32 r, bytes32 s) external {
         if (hasClaimed[msg.sender]) revert AlreadyClaimed();
 
-        bytes32 message = keccak256(abi.encodePacked(msg.sender, amount));
+        bytes32 message = keccak256(abi.encodePacked(msg.sender));
         bytes32 ethHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", message));
         if (ecrecover(ethHash, v, r, s) != signer) revert InvalidSignature();
 
-        token.transfer(msg.sender, amount);
         hasClaimed[msg.sender] = true;
+        token.transfer(msg.sender, amount);
         emit Claimed(msg.sender, amount);
     }
 
