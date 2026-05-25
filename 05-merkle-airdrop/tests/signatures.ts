@@ -1,6 +1,6 @@
 // Signing helper for claimWithSignature. Implement so the produced signature is accepted by your contract.
 
-import { keccak256, encodePacked, parseSignature, type WalletClient, type Address } from "viem";
+import { keccak256, encodePacked, type WalletClient, type Address } from "viem";
 
 export interface ClaimSignatureParts {
   v: number;
@@ -13,17 +13,18 @@ export async function signAirdropClaim(
   claimant: Address,
   amount: bigint,
 ): Promise<ClaimSignatureParts> {
-  // Same message the contract reconstructs: keccak256(abi.encodePacked(account, amount)).
   const messageHash = keccak256(encodePacked(["address", "uint256"], [claimant, amount]));
 
-  // Personal-sign over the raw 32-byte hash: the wallet prefixes
-  // "\x19Ethereum Signed Message:\n32" before hashing, exactly as the contract does.
-  const signature = await signerWallet.signMessage({
+  // personal_sign adds the "\x19Ethereum Signed Message:\n32" prefix, same as the contract
+  const sig = await signerWallet.signMessage({
     account: signerWallet.account!,
     message: { raw: messageHash },
   });
 
-  const sig = parseSignature(signature);
-  const v = sig.v !== undefined ? Number(sig.v) : 27 + sig.yParity;
-  return { v, r: sig.r, s: sig.s };
+  // 65 byte signature = r (32) + s (32) + v (1)
+  const r = `0x${sig.slice(2, 66)}` as `0x${string}`;
+  const s = `0x${sig.slice(66, 130)}` as `0x${string}`;
+  const v = parseInt(sig.slice(130, 132), 16);
+
+  return { v, r, s };
 }

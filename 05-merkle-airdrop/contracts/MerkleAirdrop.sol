@@ -3,19 +3,13 @@ pragma solidity 0.8.28;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-// MerkleAirdrop — claim ERC-20 tokens, proving eligibility two independent ways:
-// a Merkle proof against an on-chain root, or a signature from a trusted admin.
-// The hashing and recovery are done by hand here (no MerkleProof / ECDSA imports).
+// Merkle airdrop with two ways to claim: a Merkle proof (your address is on the
+// list), or a signature from the admin over your address + amount.
 //
-// Reflection:
-//  * The signed message binds the claimant's address. If the admin signed only
-//    the amount, the signature wouldn't be tied to anyone — any address could
-//    submit it and drain an allocation meant for someone else. Encoding
-//    msg.sender's address makes a given signature usable by exactly one account.
-//  * Nothing here stops replaying a signature against a *second* deployment: the
-//    message has no domain. The same (account, amount) signature verifies on any
-//    MerkleAirdrop sharing this signer. Binding the contract address and chainId
-//    into the message (i.e. an EIP-712 domain separator) would prevent it.
+// Reflection: the signed message has to include the claimer's address, or else
+// the same signature could be replayed by anyone for that amount. It doesn't
+// include the contract address / chainId, so a signature would also work on a
+// second deployment with the same signer - an EIP-712 domain would fix that.
 contract MerkleAirdrop {
     IERC20 public immutable token;
     bytes32 public immutable merkleRoot;
@@ -35,44 +29,39 @@ contract MerkleAirdrop {
         signer = _signer;
     }
 
-    // Prove membership in the Merkle list and claim `amount`.
     function claim(uint256 amount, bytes32[] calldata proof) external {
         if (hasClaimed[msg.sender]) revert AlreadyClaimed();
 
         bytes32 leaf = keccak256(abi.encodePacked(msg.sender, amount));
         if (!_verify(proof, leaf)) revert InvalidProof();
 
-        _settle(msg.sender, amount);
+        hasClaimed[msg.sender] = true;
+        token.transfer(msg.sender, amount);
+        emit Claimed(msg.sender, amount);
     }
 
-    // Present an admin signature over (msg.sender, amount) and claim `amount`.
     function claimWithSignature(uint256 amount, uint8 v, bytes32 r, bytes32 s) external {
         if (hasClaimed[msg.sender]) revert AlreadyClaimed();
 
-        bytes32 messageHash = keccak256(abi.encodePacked(msg.sender, amount));
-        bytes32 signedHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
-        address recovered = ecrecover(signedHash, v, r, s);
-        if (recovered == address(0) || recovered != signer) revert InvalidSignature();
+        bytes32 message = keccak256(abi.encodePacked(msg.sender, amount));
+        bytes32 ethHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", message));
+        if (ecrecover(ethHash, v, r, s) != signer) revert InvalidSignature();
 
-        _settle(msg.sender, amount);
+        hasClaimed[msg.sender] = true;
+        token.transfer(msg.sender, amount);
+        emit Claimed(msg.sender, amount);
     }
 
-    // Mark claimed and pay out (effects before interaction).
-    function _settle(address account, uint256 amount) private {
-        hasClaimed[account] = true;
-        emit Claimed(account, amount);
-        token.transfer(account, amount);
-    }
-
-    // Fold the proof into the leaf with sorted-pair hashing and check the root.
-    function _verify(bytes32[] calldata proof, bytes32 leaf) private view returns (bool) {
-        bytes32 computed = leaf;
+    // walk the proof, hashing the smaller value first at each step
+    function _verify(bytes32[] calldata proof, bytes32 leaf) internal view returns (bool) {
+        bytes32 hash = leaf;
         for (uint256 i = 0; i < proof.length; i++) {
-            bytes32 sibling = proof[i];
-            computed = uint256(computed) <= uint256(sibling)
-                ? keccak256(abi.encodePacked(computed, sibling))
-                : keccak256(abi.encodePacked(sibling, computed));
+            if (hash < proof[i]) {
+                hash = keccak256(abi.encodePacked(hash, proof[i]));
+            } else {
+                hash = keccak256(abi.encodePacked(proof[i], hash));
+            }
         }
-        return computed == merkleRoot;
+        return hash == merkleRoot;
     }
 }
